@@ -1,0 +1,66 @@
+#This will deploy catalog-service Web Application.
+#Please make sure the REDIS database is first deployed, before deployin the 
+#catalog-service application
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: catalog-service-deploy
+  labels:
+    name: catalog-service-deploy
+    app: demo-catalog-service
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: catalog-service-pod
+      app: demo-catalog-service
+  template:
+    metadata:
+      name: catalog-service-pod
+      labels:
+        name: catalog-service-pod
+        app: demo-catalog-service
+    spec:
+      initContainers:
+      - name: redis
+        image: redis
+        imagePullPolicy: Always
+        command:
+          - /bin/sh
+          - -c
+          - |
+          - apt update
+          - apt-get install dnsutils
+          - until nslookup redis.$(cat /var/run/secrets/kubernetes.io/serviceaccount/namespace).svc.cluster.local
+          - done
+      containers:
+      - name: catalog-service
+        image: lohith007/shypple_web_app
+        #Healtcheck for the POD, checks the health of the pod every 3secs
+        livenessProbe:
+          failureThreshold: 3
+          httpGet:
+            path: /
+            port: 80
+            scheme: HTTP
+          initialDelaySeconds: 3
+          periodSeconds: 3
+          successThreshold: 1
+          timeoutSeconds: 1
+        #Checks container if is ready to start accepting traffic
+        readinessProbe:
+          failureThreshold: 1
+          httpGet:
+            path: /
+            port: 80
+            scheme: HTTP
+        ports:
+        - containerPort: 80
+        env: 
+        #Passing REDIS connection string as environment variable
+        - name: REDIS_URL
+          value: redis://redis.default.svc.cluster.local:6379      
+      restartPolicy: Always
+
